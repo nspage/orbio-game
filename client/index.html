@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>OrbIO - Multiplayer Orb Game</title>
+    <link rel="stylesheet" href="css/styles.css">
+    
+    <!-- P5.js Library -->
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.6.0/lib/p5.js"></script>
+    
+    <!-- Socket.io Client Library -->
+    <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.6.1/dist/socket.io.min.js"></script>
+    
+    <!-- TON Connect Library -->
+    <script src="https://cdn.jsdelivr.net/npm/@tonconnect/sdk@2.0.7/dist/tonconnect-sdk.min.js"></script>
+    
+    <!-- Game Scripts -->
+    <script src="js/util.js"></script>
+    <script src="js/assets.js"></script>
+    <script src="js/food.js"></script>
+    <script src="js/player.js"></script>
+    <script src="js/socket-handler.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/telegram-auth.js"></script>
+    <script src="js/ton-connect.js"></script>
+    <script src="js/game.js"></script>
+</head>
+<body>
+    <div id="game-container">
+        <!-- P5.js will create canvas here -->
+    </div>
+    
+    <div id="ui-overlay">
+        <div id="login-screen" class="screen">
+            <div class="game-title">OrbIO</div>
+            <div class="game-subtitle">
+                Control your orb, collect smaller orbs, grow in size, and dominate 
+                the arena by consuming other players. The bigger you get, the more 
+                points you earn. Can you reach the top of the leaderboard?
+            </div>
+            
+            <div class="login-options">
+                <div class="login-option-container">
+                    <h3>Sign In to Save Progress</h3>
+                    
+                    <div class="auth-buttons">
+                        <div id="telegram-login-container" class="auth-button-container">
+                            <!-- Telegram Login Button will be inserted here -->
+                            <div class="auth-label">Telegram Login</div>
+                        </div>
+                        
+                        <div class="auth-button-container">
+                            <button id="ton-connect-button" class="login-button">
+                                Connect TON Wallet
+                            </button>
+                            <div class="auth-label">Blockchain Authentication</div>
+                        </div>
+                    </div>
+                    
+                    <div class="login-separator">
+                        <span>or</span>
+                    </div>
+                    
+                    <button id="guest-login-button" class="login-button guest-button">
+                        Play as Guest
+                    </button>
+                    <div class="guest-note">No account required. Progress won't be saved.</div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="game-ui" class="hidden">
+            <div id="leaderboard">
+                <div class="leaderboard-title">Top Players</div>
+                <div id="leaderboard-entries"></div>
+            </div>
+            
+            <div id="player-stats">
+                <div id="player-score">Score: 0</div>
+                <div id="player-size">Size: 10</div>
+            </div>
+            
+            <div id="mobile-controls" class="hidden">
+                <div id="joystick-area"></div>
+            </div>
+
+            <button id="settings-button" class="ui-button">⚙️</button>
+            <div id="settings-panel" class="settings-panel hidden">
+                <h3>Settings</h3>
+                <div class="setting-item">
+                    <label for="direction-indicator">Direction Indicator</label>
+                    <input type="checkbox" id="direction-indicator" checked>
+                </div>
+                <div class="setting-item">
+                    <label for="custom-image">Custom Orb Image</label>
+                    <button id="upload-image-btn" class="settings-button">Upload</button>
+                </div>
+                <input type="file" id="image-upload" accept="image/*" style="display: none;">
+                <div id="custom-image-preview" class="image-preview hidden"></div>
+                <button id="close-settings">Close</button>
+            </div>
+        </div>
+        
+        <div id="death-screen" class="screen hidden">
+            <div class="death-title">Game Over</div>
+            <div id="final-score">Your Score: 0</div>
+            <div id="final-rank">Your Rank: #0</div>
+            <button id="play-again-button" class="login-button">
+                Play Again
+            </button>
+        </div>
+        
+        <div id="connection-status">
+            Connecting to server...
+        </div>
+    </div>
+</body>
+</html>
