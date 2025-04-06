@@ -15,8 +15,422 @@ let disconnected = false;
 let savedGuestProgress = null;
 let tempCustomImage = null;
 let isLandscape = window.innerWidth > window.innerHeight;
+// Add after other global variables
+let powerups = [];
+let powerupTypes = ["speed", "shield", "size"];
+let powerupColors = {
+    "speed": color(0, 255, 255),  // Cyan
+    "shield": color(255, 215, 0),  // Gold
+    "size": color(173, 255, 47)    // Green-yellow
+};// Add after other global variables
+let aiPlayers = [];
+const AI_PLAYER_COUNT = 10; // Number of AI players
+
+// Function to initialize AI players
+function initAIPlayers() {
+    // Clear any existing AI players
+    aiPlayers = [];
+    
+    // Create AI players
+    for (let i = 0; i < AI_PLAYER_COUNT; i++) {
+        const aiName = `Bot-${i + 1}`;
+        const aiColor = color(random(100, 255), random(100, 255), random(100, 255));
+        const aiSize = random(15, 40); // Random starting size
+        
+        aiPlayers.push({
+            id: `ai-${i}`,
+            x: random(100, gameWidth - 100),
+            y: random(100, gameHeight - 100),
+            radius: aiSize,
+            targetX: random(100, gameWidth - 100),
+            targetY: random(100, gameHeight - 100),
+            color: aiColor,
+            name: aiName,
+            vx: 0,
+            vy: 0,
+            speed: 5 * (1 - min(0.8, aiSize / 300)) // Speed based on size
+        });
+    }
+}
+// Function to update AI players
+function updateAIPlayers() {
+    for (let i = 0; i < aiPlayers.length; i++) {
+        const ai = aiPlayers[i];
+        
+        // Occasionally change target
+        if (random() < 0.01) { // 1% chance per frame
+            ai.targetX = random(100, gameWidth - 100);
+            ai.targetY = random(100, gameHeight - 100);
+        }
+        
+        // Find closest food if no target
+        if (random() < 0.05) { // 5% chance per frame
+            let closestFood = null;
+            let closestDist = 9999;
+            
+            for (const food of foods) {
+                const d = dist(ai.x, ai.y, food.x, food.y);
+                if (d < closestDist) {
+                    closestDist = d;
+                    closestFood = food;
+                }
+            }
+            
+            if (closestFood) {
+                ai.targetX = closestFood.x;
+                ai.targetY = closestFood.y;
+            }
+        }
+        
+        // Find smaller players to chase
+        if (random() < 0.03) { // 3% chance per frame
+            // Look for smaller players (including other AI)
+            let targets = [...Object.values(otherPlayers), ...aiPlayers];
+            
+            // Filter out self and larger players
+            targets = targets.filter(target => 
+                target.id !== ai.id && target.radius < ai.radius * 0.9
+            );
+            
+            if (targets.length > 0) {
+                // Choose a random smaller player to chase
+                const target = random(targets);
+                ai.targetX = target.x;
+                ai.targetY = target.y;
+            }
+        }
+        
+        // Avoid larger players
+        for (const other of [...Object.values(otherPlayers), ...aiPlayers]) {
+            if (other.id !== ai.id && other.radius > ai.radius * 1.1) {
+                const d = dist(ai.x, ai.y, other.x, other.y);
+                
+                // If too close to a bigger player, flee
+                if (d < other.radius * 5) {
+                    const fleeAngle = atan2(ai.y - other.y, ai.x - other.x);
+                    ai.targetX = ai.x + cos(fleeAngle) * 300;
+                    ai.targetY = ai.y + sin(fleeAngle) * 300;
+                }
+            }
+        }
+        
+        // Avoid walls
+        const margin = 100;
+        if (ai.x < margin) ai.targetX = ai.x + 200;
+        if (ai.y < margin) ai.targetY = ai.y + 200;
+        if (ai.x > gameWidth - margin) ai.targetX = ai.x - 200;
+        if (ai.y > gameHeight - margin) ai.targetY = ai.y - 200;
+        
+        // Calculate direction to target
+        const dx = ai.targetX - ai.x;
+        const dy = ai.targetY - ai.y;
+        const dist = sqrt(dx * dx + dy * dy);
+        
+        // Update velocity
+        if (dist > 0) {
+            // Calculate speed based on size
+            ai.speed = 5 * (1 - min(0.8, ai.radius / 300));
+            
+            ai.vx = (dx / dist) * ai.speed;
+            ai.vy = (dy / dist) * ai.speed;
+        }
+        
+        // Update position
+        ai.x += ai.vx;
+        ai.y += ai.vy;
+        
+        // Constrain to game boundaries
+        ai.x = constrain(ai.x, ai.radius, gameWidth - ai.radius);
+        ai.y = constrain(ai.y, ai.radius, gameHeight - ai.radius);
+        
+        // Check for food collisions
+        for (let j = foods.length - 1; j >= 0; j--) {
+            const food = foods[j];
+            const d = dist(ai.x, ai.y, food.x, food.y);
+            
+            if (d < ai.radius + food.radius) {
+                // AI collected food
+                ai.radius += food.value * 0.2;
+                
+                // Remove food locally
+                foods.splice(j, 1);
+                
+                // Notify server about food being eaten
+                if (socket && socket.connected) {
+                    socket.emit('eat-food', food.id);
+                }
+            }
+        }
+        
+        // Check for AI-AI collisions
+        for (let j = 0; j < aiPlayers.length; j++) {
+            if (i !== j) {
+                const other = aiPlayers[j];
+                const d = dist(ai.x, ai.y, other.x, other.y);
+                
+                if (d < ai.radius + other.radius) {
+                    // Collision detected
+                    if (ai.radius > other.radius * 1.1) {
+                        // AI can eat the other AI
+                        const sizeGain = other.radius * 0.5;
+                        ai.radius += sizeGain * 0.2;
+                        
+                        // Respawn the eaten AI
+                        other.x = random(100, gameWidth - 100);
+                        other.y = random(100, gameHeight - 100);
+                        other.radius = random(15, 40);
+                    }
+                }
+            }
+        }
+        
+        // Check for player-AI collisions
+        if (player && player.active) {
+            const d = dist(player.x, player.y, ai.x, ai.y);
+            
+            if (d < player.radius + ai.radius) {
+                // Collision detected
+                if (player.radius > ai.radius * 1.1) {
+                    // Player can eat the AI
+                    const sizeGain = ai.radius * 0.5;
+                    player.grow(sizeGain);
+                    updatePlayerStats();
+                    
+                    // Respawn the eaten AI
+                    ai.x = random(100, gameWidth - 100);
+                    ai.y = random(100, gameHeight - 100);
+                    ai.radius = random(15, 40);
+                } else if (ai.radius > player.radius * 1.1 && !player.hasShield) {
+                    // AI eats the player
+                    playerDeath();
+                }
+            }
+        }
+    }
+}
+// Function to draw AI players
+function drawAIPlayers() {
+    for (const ai of aiPlayers) {
+        push();
+        translate(ai.x, ai.y);
+        
+        // Draw AI player
+        noStroke();
+        fill(ai.color);
+        ellipse(0, 0, ai.radius * 2);
+        
+        // Draw highlight
+        fill(255, 255, 255, 70);
+        let highlightSize = ai.radius * 0.6;
+        ellipse(-ai.radius * 0.25, -ai.radius * 0.25, highlightSize, highlightSize);
+        
+        // Draw name
+        fill(255);
+        textAlign(CENTER, CENTER);
+        textSize(max(10, ai.radius / 3));
+        text(ai.name, 0, -ai.radius - 10);
+        
+        pop();
+    }
+}
+
+
 
 // P5.js setup function
+// Add after other functions
+// Spawn powerups periodically
+function spawnPowerups() {
+    // Maximum number of powerups on screen
+    const maxPowerups = 5;
+    
+    // Only spawn if below max
+    if (powerups.length < maxPowerups && random() < 0.01) { // 1% chance per frame
+        const type = random(powerupTypes);
+        const powerup = {
+            id: 'p-' + generateID(),
+            x: random(50, gameWidth - 50),
+            y: random(50, gameHeight - 50),
+            radius: 15,
+            type: type,
+            color: powerupColors[type],
+            pulseAmount: 0,
+            pulseDirection: 1,
+            rotationAngle: 0
+        };
+        
+        powerups.push(powerup);
+        
+        // If multiplayer, notify server about new powerup
+        if (socket && socket.connected) {
+            socket.emit('new-powerup', powerup);
+        }
+    }
+};
+// Add after other functions
+// Spawn powerups periodically
+function spawnPowerups() {
+    // Maximum number of powerups on screen
+    const maxPowerups = 5;
+    
+    // Only spawn if below max
+    if (powerups.length < maxPowerups && random() < 0.01) { // 1% chance per frame
+        const type = random(powerupTypes);
+        const powerup = {
+            id: 'p-' + generateID(),
+            x: random(50, gameWidth - 50),
+            y: random(50, gameHeight - 50),
+            radius: 15,
+            type: type,
+            color: powerupColors[type],
+            pulseAmount: 0,
+            pulseDirection: 1,
+            rotationAngle: 0
+        };
+        
+        powerups.push(powerup);
+        
+        // If multiplayer, notify server about new powerup
+        if (socket && socket.connected) {
+            socket.emit('new-powerup', powerup);
+        }
+    }
+};
+// Add after drawFood function
+// Draw powerups
+function drawPowerups() {
+    for (const powerup of powerups) {
+        push();
+        translate(powerup.x, powerup.y);
+        
+        // Pulse animation
+        powerup.pulseAmount += 0.02 * powerup.pulseDirection;
+        if (powerup.pulseAmount > 0.3 || powerup.pulseAmount < 0) {
+            powerup.pulseDirection *= -1;
+        }
+        
+        // Rotation animation
+        powerup.rotationAngle += 0.03;
+        rotate(powerup.rotationAngle);
+        
+        // Draw powerup
+        noStroke();
+        fill(powerup.color);
+        const displayRadius = powerup.radius * (1 + powerup.pulseAmount);
+        
+        // Draw different shapes based on type
+        if (powerup.type === "speed") {
+            // Lightning bolt for speed
+            beginShape();
+            vertex(-displayRadius/2, -displayRadius);
+            vertex(displayRadius/2, -displayRadius/3);
+            vertex(0, 0);
+            vertex(displayRadius/2, 0);
+            vertex(-displayRadius/2, displayRadius);
+            vertex(0, displayRadius/3);
+            vertex(-displayRadius/4, 0);
+            endShape(CLOSE);
+        } else if (powerup.type === "shield") {
+            // Shield
+            ellipse(0, 0, displayRadius * 2);
+            fill(0, 0, 0, 50);
+            arc(0, 0, displayRadius * 1.4, displayRadius * 1.4, PI + 0.5, TWO_PI + PI - 0.5);
+        } else if (powerup.type === "size") {
+            // Size boost (star shape)
+            let angle = TWO_PI / 10;
+            beginShape();
+            for (let i = 0; i < 10; i++) {
+                let r = (i % 2 === 0) ? displayRadius : displayRadius * 0.5;
+                let x = cos(i * angle - HALF_PI) * r;
+                let y = sin(i * angle - HALF_PI) * r;
+                vertex(x, y);
+            }
+            endShape(CLOSE);
+        }
+        
+        // Draw highlight
+        fill(255, 255, 255, 70);
+        ellipse(-displayRadius * 0.2, -displayRadius * 0.2, displayRadius * 0.5);
+        
+        pop();
+    }
+};
+// Add after checkFoodCollisions function
+// Check for powerup collisions
+function checkPowerupCollisions() {
+    for (let i = powerups.length - 1; i >= 0; i--) {
+        const powerup = powerups[i];
+        const d = dist(player.x, player.y, powerup.x, powerup.y);
+        
+        if (d < player.radius + powerup.radius) {
+            // Player collected powerup
+            applyPowerup(powerup.type);
+            
+            // Remove powerup locally
+            powerups.splice(i, 1);
+            
+            // Notify server
+            if (socket && socket.connected) {
+                socket.emit('collect-powerup', powerup.id);
+            }
+        }
+    }
+};
+// Add this function to apply powerup effects
+function applyPowerup(type) {
+    switch(type) {
+        case "speed":
+            // Speed boost for 10 seconds
+            const originalSpeed = player.maxSpeed;
+            player.maxSpeed = player.maxSpeed * 1.5;
+            
+            // Create visual effect
+            displayPowerupMessage("Speed Boost!");
+            
+            // Reset after 10 seconds
+            setTimeout(() => {
+                player.maxSpeed = originalSpeed;
+                displayPowerupMessage("Speed boost ended");
+            }, 10000);
+            break;
+            
+        case "shield":
+            // Shield for 15 seconds
+            player.hasShield = true;
+            
+            // Create visual effect
+            displayPowerupMessage("Shield Activated!");
+            
+            // Reset after 15 seconds
+            setTimeout(() => {
+                player.hasShield = false;
+                displayPowerupMessage("Shield deactivated");
+            }, 15000);
+            break;
+            
+        case "size":
+            // Instant size increase
+            player.grow(player.radius * 0.3);
+            updatePlayerStats();
+            
+            // Create visual effect
+            displayPowerupMessage("Size Boost!");
+            break;
+    }
+};
+// Add function to display powerup messages
+function displayPowerupMessage(message) {
+    const messageElement = document.createElement('div');
+    messageElement.className = 'powerup-message';
+    messageElement.textContent = message;
+    document.getElementById('game-ui').appendChild(messageElement);
+    
+    // Remove after animation
+    setTimeout(() => {
+        if (document.body.contains(messageElement)) {
+            document.getElementById('game-ui').removeChild(messageElement);
+        }
+    }, 3000);
+};
 function setup() {
     // Create canvas that fills the window
     canvas = createCanvas(windowWidth, windowHeight);
@@ -160,7 +574,27 @@ function checkSavedGuestProgress() {
 // P5.js draw function - called each frame
 function draw() {
     if (gameState === 'playing') {
-        updateGame();
+        updateGame(){
+            if (!player || !player.active) return;
+            
+            // Update player movement based on input (mouse or touch)
+            updatePlayerMovement();
+            
+            // Check for food collisions
+            checkFoodCollisions();
+            
+            // Check for player collisions
+            checkPlayerCollisions();
+            
+            // Check for powerup collisions
+            checkPowerupCollisions();
+            
+            // Spawn powerups occasionally
+            spawnPowerups();
+            
+            // Update camera position and zoom
+            updateCamera();
+        };
         drawGame();
     }
 }
@@ -183,6 +617,7 @@ function updateGame() {
 }
 
 // Draw the game
+// Modify drawGame function to draw powerups
 function drawGame() {
     // Clear the canvas
     background(240);
@@ -200,6 +635,9 @@ function drawGame() {
     
     // Draw food
     drawFood();
+    
+    // Draw powerups
+    drawPowerups();
     
     // Draw other players
     drawOtherPlayers();
@@ -350,4 +788,82 @@ function checkPlayerCollisions() {
 // Window resize handling
 function windowResized() {
     resizeCanvas(windowWidth, windowHeight);
+}
+// Add after other functions
+// Spawn powerups periodically
+function spawnPowerups() {
+    // Maximum number of powerups on screen
+    const maxPowerups = 5;
+    
+    // Only spawn if below max
+    if (powerups.length < maxPowerups && random() < 0.01) { // 1% chance per frame
+        const type = random(powerupTypes);
+        const powerup = {
+            id: 'p-' + generateID(),
+            x: random(50, gameWidth - 50),
+            y: random(50, gameHeight - 50),
+            radius: 15,
+            type: type,
+            color: powerupColors[type],
+            pulseAmount: 0,
+            pulseDirection: 1,
+            rotationAngle: 0
+        };
+        
+        powerups.push(powerup);
+        
+        // If multiplayer, notify server about new powerup
+        if (socket && socket.connected) {
+            socket.emit('new-powerup', powerup);
+        }
+        // Start the game
+function startGame(savedProgress = null) {
+    // Hide login screen
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('game-ui').classList.remove('hidden');
+    
+    // Reset game state
+    gameState = 'playing';
+    
+    // Apply saved progress if available
+    let startRadius = 20; // Default starting radius
+    let startPosition = { 
+        x: random(gameWidth), 
+        y: random(gameHeight) 
+    };
+    
+    if (savedProgress) {
+        startRadius = savedProgress.size || startRadius;
+        playerColor = savedProgress.color || playerColor;
+    }
+    
+    // Create player
+    player = new Player(
+        startPosition.x,
+        startPosition.y,
+        startRadius,
+        playerColor,
+        playerName
+    );
+    
+    // Initialize AI players
+    initAIPlayers();
+    
+    // Send player join request to server
+    joinGame(playerName, playerColor);
+    
+    // Show mobile controls if needed
+    if (isMobile()) {
+        document.getElementById('mobile-controls').classList.remove('hidden');
+        setupTouchControls();
+    }
+    
+    // Update player stats display
+    updatePlayerStats();
+    
+    // Load saved custom image if available
+    loadSavedCustomImage();
+}
+
+    }
 }

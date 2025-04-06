@@ -31,6 +31,24 @@ class Player {
         this.segments = [];
         this.segmentCount = 12;
         this.initSegments();
+
+        // Add to the Player constructor:
+this.hasShield = false;
+
+// Modify the Player draw method to add shield effect (inside draw function):
+// Add this after drawing the player body but before the direction indicator:
+if (this.hasShield) {
+    // Draw shield effect
+    noFill();
+    strokeWeight(3);
+    stroke(255, 215, 0, 150 + sin(frameCount * 0.1) * 50); // Pulsing gold effect
+    ellipse(0, 0, this.radius * 2.2);
+    
+    // Inner shield glow
+    stroke(255, 215, 0, 70);
+    strokeWeight(7);
+    ellipse(0, 0, this.radius * 2.4);
+}
     }
     
     initSegments() {
@@ -101,28 +119,38 @@ class Player {
         
         // Draw player body
         if (this.hasCustomImage && this.customImage) {
-            // Draw with custom image
-            imageMode(CENTER);
-            
-            // Draw circular mask first
+            // Draw with custom image using proper circular masking
             let maskSize = this.radius * 2;
             
-            // Create circular mask by using the existing orb shape
-            noStroke();
-            fill(255, 255);
-            ellipse(0, 0, maskSize, maskSize);
+            // Create a graphics buffer for the masked image
+            let maskedImg = createGraphics(maskSize, maskSize);
             
-            // Draw the image with blend mode to apply to the mask
-            blendMode(MULTIPLY);
-            image(this.customImage, 0, 0, maskSize, maskSize);
-            blendMode(NORMAL);
+            // Draw the circle mask
+            maskedImg.noStroke();
+            maskedImg.fill(255);
+            maskedImg.ellipse(maskSize/2, maskSize/2, maskSize, maskSize);
+            
+            // Set blend mode to get only the parts of the image inside the circle
+            maskedImg.blendMode(MULTIPLY);
+            
+            // Draw the image
+            maskedImg.imageMode(CENTER);
+            maskedImg.image(this.customImage, maskSize/2, maskSize/2, maskSize, maskSize);
+            
+            // Draw the resulting masked image
+            imageMode(CENTER);
+            image(maskedImg, 0, 0);
             
             // Draw border
             noFill();
             stroke(255, 100);
             strokeWeight(2);
             ellipse(0, 0, maskSize, maskSize);
-        } else {
+            
+            // Clean up to avoid memory leaks
+            maskedImg.remove();
+        }
+        else {
             // Draw blob body
             noStroke();
             fill(this.color);

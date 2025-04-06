@@ -1,3 +1,4 @@
+// File: client/js/ton-connect.js
 // TON Connect Integration
 
 // TON Connect instance
@@ -214,7 +215,7 @@ async function sendTONTransaction(amount, message = '') {
             messages: [
                 {
                     // Game wallet address (replace with your actual game wallet)
-                    address: 'EQBIhPuWmjT7fP-VomuTWKO8_CxYroQJ4nU-2hQYm5GTLf_Y',
+                    address: 'EQBIhPuWmjT7fP-VomuTWKO8_CxYroQJ4nU-2hQYm5GTLf_Y', 
                     amount: amount.toString(),
                     payload: message
                 }
