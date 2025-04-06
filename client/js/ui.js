@@ -1,337 +1,139 @@
-// UI related variables
-let joystickActive = false;
-let joystickX = 0;
-let joystickY = 0;
-let joystickStartX = 0;
-let joystickStartY = 0;
-let joystickKnob;
-let joystickAngle = 0;
-let joystickDistance = 0;
+// File: client/js/ton-connect.js
+// Add these functions before the DOMContentLoaded event listener
 
-// Initialize UI elements
-function initUI() {
-    // Initialize joystick if on mobile
-    if (isMobile()) {
-        setupTouchControls();
-    }
-    
-    // Add event listeners for settings panel
-    document.getElementById('settings-button').addEventListener('click', () => {
-        document.getElementById('settings-panel').classList.toggle('hidden');
+// Function to verify NFT ownership
+async function verifyNFTOwnership(address, collectionAddress, nftIndex) {
+  try {
+    const response = await fetch('/api/verify-nft-ownership', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userAddress: address,
+        collectionAddress: collectionAddress,
+        nftIndex: nftIndex
+      }),
     });
     
-    document.getElementById('close-settings').addEventListener('click', () => {
-        document.getElementById('settings-panel').classList.add('hidden');
-    });
-    
-    document.getElementById('direction-indicator').addEventListener('change', (e) => {
-        if (player) {
-            player.directionIndicator = e.target.checked;
-        }
-    });
+    const data = await response.json();
+    return data.owned;
+  } catch (error) {
+    console.error('Error verifying NFT ownership:', error);
+    return false;
+  }
 }
 
-// Set up touch controls for mobile
-function setupTouchControls() {
-    const joystickArea = document.getElementById('joystick-area');
-    
-    // Create joystick knob
-    joystickKnob = document.createElement('div');
-    joystickKnob.className = 'joystick-knob';
-    joystickArea.appendChild(joystickKnob);
-    
-    // Center the knob initially
-    const joystickRect = joystickArea.getBoundingClientRect();
-    joystickX = joystickRect.width / 2;
-    joystickY = joystickRect.height / 2;
-    updateJoystickPosition();
-    
-    // Set up touch event listeners
-    joystickArea.addEventListener('touchstart', handleJoystickStart);
-    joystickArea.addEventListener('touchmove', handleJoystickMove);
-    joystickArea.addEventListener('touchend', handleJoystickEnd);
+// Add event listener for NFT selection
+const selectNftBtn = document.getElementById('select-nft-btn');
+if (selectNftBtn) {
+    selectNftBtn.addEventListener('click', showNFTSelectionDialog);
 }
 
-// Handle joystick touch start
-function handleJoystickStart(e) {
-    e.preventDefault();
-    const touch = e.touches[0];
-    const joystickRect = e.target.getBoundingClientRect();
-    
-    joystickStartX = touch.clientX - joystickRect.left;
-    joystickStartY = touch.clientY - joystickRect.top;
-    
-    joystickX = joystickStartX;
-    joystickY = joystickStartY;
-    joystickActive = true;
-    
-    updateJoystickPosition();
-}
-
-// Handle joystick touch move
-function handleJoystickMove(e) {
-    if (!joystickActive) return;
-    e.preventDefault();
-    
-    const touch = e.touches[0];
-    const joystickRect = e.target.getBoundingClientRect();
-    
-    joystickX = touch.clientX - joystickRect.left;
-    joystickY = touch.clientY - joystickRect.top;
-    
-    // Calculate distance from center
-    const dx = joystickX - joystickStartX;
-    const dy = joystickY - joystickStartY;
-    joystickDistance = Math.sqrt(dx * dx + dy * dy);
-    
-    // Limit distance to joystick area
-    const maxDistance = joystickRect.width / 2 - 25; // Half of joystick area minus half of knob size
-    
-    if (joystickDistance > maxDistance) {
-        const angle = Math.atan2(dy, dx);
-        joystickX = joystickStartX + Math.cos(angle) * maxDistance;
-        joystickY = joystickStartY + Math.sin(angle) * maxDistance;
-        joystickDistance = maxDistance;
-    }
-    
-    // Calculate angle
-    joystickAngle = Math.atan2(joystickY - joystickStartY, joystickX - joystickStartX);
-    
-    updateJoystickPosition();
-}
-
-// Handle joystick touch end
-function handleJoystickEnd(e) {
-    e.preventDefault();
-    
-    // Return joystick to center
-    const joystickRect = e.target.getBoundingClientRect();
-    joystickX = joystickRect.width / 2;
-    joystickY = joystickRect.height / 2;
-    joystickActive = false;
-    joystickDistance = 0;
-    
-    updateJoystickPosition();
-}
-
-// Update joystick knob position
-function updateJoystickPosition() {
-    if (joystickKnob) {
-        joystickKnob.style.left = (joystickX - 25) + 'px'; // 25 is half of knob size
-        joystickKnob.style.top = (joystickY - 25) + 'px';
-    }
-}
-
-// Start as guest
-function startAsGuest() {
-    playerName = `Guest-${Math.floor(Math.random() * 1000)}`;
-    playerColor = color(random(100, 255), random(100, 255), random(100, 255));
-    localStorage.setItem('guestSession', 'active');
-    startGame();
-}
-
-// Play again after death
-function playAgain() {
-    document.getElementById('death-screen').classList.add('hidden');
-    startGame();
-}
-
-// Start the game
-function startGame(savedProgress = null) {
-    // Hide login screen
-    document.getElementById('login-screen').classList.add('hidden');
-    document.getElementById('game-ui').classList.remove('hidden');
-    
-    // Reset game state
-    gameState = 'playing';
-    
-    // Apply saved progress if available
-    let startRadius = 20; // Default starting radius
-    let startPosition = { 
-        x: random(gameWidth), 
-        y: random(gameHeight) 
-    };
-    
-    if (savedProgress) {
-        startRadius = savedProgress.size || startRadius;
-        playerColor = savedProgress.color || playerColor;
-    }
-    
-    // Create player
-    player = new Player(
-        startPosition.x,
-        startPosition.y,
-        startRadius,
-        playerColor,
-        playerName
+// Function to load NFT image
+async function loadNFTAsPlayerImage(collectionAddress, nftIndex) {
+  if (!tonWallet) {
+    alert('Please connect your TON wallet first');
+    return;
+  }
+  
+  // Show loading indicator
+  const loadingEl = document.createElement('div');
+  loadingEl.className = 'loading-overlay';
+  loadingEl.innerHTML = '<div class="loading-spinner"></div><p>Verifying NFT ownership...</p>';
+  document.body.appendChild(loadingEl);
+  
+  try {
+    // Verify ownership
+    const isOwned = await verifyNFTOwnership(
+      tonWallet.address,
+      collectionAddress,
+      nftIndex
     );
     
-    // Send player join request to server
-    joinGame(playerName, playerColor);
-    
-    // Show mobile controls if needed
-    if (isMobile()) {
-        document.getElementById('mobile-controls').classList.remove('hidden');
-        setupTouchControls();
+    if (!isOwned) {
+      document.body.removeChild(loadingEl);
+      alert('You do not own this NFT');
+      return;
     }
     
-    // Update player stats display
-    updatePlayerStats();
-}
-
-// Update player stats display
-function updatePlayerStats() {
-    document.getElementById('player-score').textContent = `Score: ${Math.floor(player.score)}`;
-    document.getElementById('player-size').textContent = `Size: ${Math.floor(player.radius)}`;
-}
-
-// Player death handling
-function playerDeath() {
-    gameState = 'dead';
+    // Update loading message
+    loadingEl.innerHTML = '<div class="loading-spinner"></div><p>Loading NFT image...</p>';
     
-    // Save guest progress if playing as guest
-    if (playerName.startsWith('Guest-') && !telegramUser && !tonWallet) {
-        savedGuestProgress = {
-            score: Math.floor(player.score),
-            size: Math.floor(player.radius),
-            color: playerColor
-        };
-        localStorage.setItem('guestProgress', JSON.stringify(savedGuestProgress));
+    // Get NFT metadata/image
+    const response = await fetch(`/api/get-nft-image?collection=${collectionAddress}&index=${nftIndex}`);
+    const data = await response.json();
+    
+    // Create image object
+    loadImage(data.imageUrl, (img) => {
+      if (player) {
+        player.setCustomImage(img);
         
-        // Show registration prompt
-        showRegistrationPrompt();
+        // Save to localStorage
+        localStorage.setItem('playerCustomImage', data.imageUrl);
+      }
+      
+      document.body.removeChild(loadingEl);
+      alert('NFT successfully set as your player image!');
+    });
+  } catch (error) {
+    console.error('Error loading NFT:', error);
+    document.body.removeChild(loadingEl);
+    alert('Error loading NFT image. Please try again.');
+  }
+}
+
+// Function to show NFT selection dialog
+function showNFTSelectionDialog() {
+  if (!tonWallet) {
+    alert('Please connect your TON wallet first to use NFTs');
+    return;
+  }
+  
+  const dialog = document.createElement('div');
+  dialog.className = 'nft-dialog';
+  dialog.innerHTML = `
+    <div class="nft-dialog-content">
+      <h3>Select your NFT</h3>
+      <p>Enter your NFT collection address and index:</p>
+      
+      <div class="nft-input-group">
+        <label>Collection Address:</label>
+        <input type="text" id="nft-collection-input" placeholder="EQ...">
+      </div>
+      
+      <div class="nft-input-group">
+        <label>NFT Index:</label>
+        <input type="number" id="nft-index-input" min="0" value="0">
+      </div>
+      
+      <div class="nft-dialog-buttons">
+        <button id="nft-cancel-btn" class="cancel-button">Cancel</button>
+        <button id="nft-apply-btn" class="apply-button">Apply NFT</button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(dialog);
+  
+  // Add event listeners
+  document.getElementById('nft-cancel-btn').addEventListener('click', () => {
+    document.body.removeChild(dialog);
+  });
+  
+  document.getElementById('nft-apply-btn').addEventListener('click', () => {
+    const collectionAddress = document.getElementById('nft-collection-input').value;
+    const nftIndex = document.getElementById('nft-index-input').value;
+    
+    if (!collectionAddress) {
+      alert('Please enter a collection address');
+      return;
     }
     
-    // Update UI
-    document.getElementById('death-screen').classList.remove('hidden');
-    document.getElementById('game-ui').classList.add('hidden');
-    
-    document.getElementById('final-score').textContent = `Your Score: ${Math.floor(player.score)}`;
-    
-    // Find player rank
-    const rank = leaderboard.findIndex(entry => entry.id === playerID) + 1;
-    document.getElementById('final-rank').textContent = `Your Rank: #${rank || '-'}`;
-    
-    // Notify server
-    playerDied();
+    document.body.removeChild(dialog);
+    loadNFTAsPlayerImage(collectionAddress, nftIndex);
+  });
 }
 
-// Show registration prompt
-function showRegistrationPrompt() {
-    const registrationPrompt = document.createElement('div');
-    registrationPrompt.className = 'registration-prompt';
-    registrationPrompt.innerHTML = `
-        <div class="prompt-content">
-            <h3>Save Your Progress!</h3>
-            <p>Your score: ${savedGuestProgress.score}</p>
-            <p>Register to save your progress and continue playing with the same stats.</p>
-            <div class="prompt-buttons">
-                <button id="register-telegram" class="prompt-button">Register with Telegram</button>
-                <button id="register-ton" class="prompt-button">Connect TON Wallet</button>
-                <button id="stay-guest" class="prompt-button secondary">Continue as Guest</button>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(registrationPrompt);
-    
-    // Add event listeners
-    document.getElementById('register-telegram').addEventListener('click', () => {
-        document.body.removeChild(registrationPrompt);
-        initTelegramLogin(true); // true indicates registration after guest play
-    });
-    
-    document.getElementById('register-ton').addEventListener('click', () => {
-        document.body.removeChild(registrationPrompt);
-        connectTON(true); // true indicates registration after guest play
-    });
-    
-    document.getElementById('stay-guest').addEventListener('click', () => {
-        document.body.removeChild(registrationPrompt);
-    });
-}
-
-// Set up image upload functionality
-function setupImageUpload() {
-    const uploadBtn = document.getElementById('upload-image-btn');
-    const fileInput = document.getElementById('image-upload');
-    const previewContainer = document.getElementById('custom-image-preview');
-    
-    // Handle upload button click
-    uploadBtn.addEventListener('click', () => {
-        fileInput.click();
-    });
-    
-    // Handle file selection
-    fileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        
-        // Validate file
-        if (!validateImageFile(file)) {
-            alert('Please upload a valid image file (JPG, PNG, GIF) under 2MB');
-            return;
-        }
-        
-        // Process image
-        processPlayerImage(file);
-    });
-}
-
-// Process player image
-function processPlayerImage(file) {
-    const reader = new FileReader();
-    const previewContainer = document.getElementById('custom-image-preview');
-    
-    reader.onload = (e) => {
-        // Show preview
-        previewContainer.innerHTML = `
-            <img src="${e.target.result}" alt="Custom orb image">
-            <div class="image-preview-actions">
-                <button id="apply-image" class="preview-button apply-button">Apply</button>
-                <button id="cancel-image" class="preview-button cancel-button">Cancel</button>
-            </div>
-        `;
-        previewContainer.classList.remove('hidden');
-        
-        // Create P5 image object
-        loadImage(e.target.result, (img) => {
-            // Store temporary image
-            tempCustomImage = img;
-            
-            // Setup buttons
-            document.getElementById('apply-image').addEventListener('click', () => {
-                if (player && tempCustomImage) {
-                    player.setCustomImage(tempCustomImage);
-                    
-                    // Save image to localStorage for persistence (base64)
-                    try {
-                        localStorage.setItem('playerCustomImage', e.target.result);
-                    } catch (error) {
-                        console.error('Error saving image to localStorage:', error);
-                        // Image might be too large for localStorage
-                    }
-                }
-                previewContainer.classList.add('hidden');
-            });
-            
-            document.getElementById('cancel-image').addEventListener('click', () => {
-                tempCustomImage = null;
-                previewContainer.classList.add('hidden');
-            });
-        });
-    };
-    
-    // Read file as data URL (base64)
-    reader.readAsDataURL(file);
-}
-
-// Load saved custom image from localStorage if available
-function loadSavedCustomImage() {
-    const savedImage = localStorage.getItem('playerCustomImage');
-    if (savedImage && player) {
-        loadImage(savedImage, (img) => {
-            player.setCustomImage(img);
-        });
-    }
-}
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', initTONConnect);
