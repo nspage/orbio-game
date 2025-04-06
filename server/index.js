@@ -11,8 +11,27 @@ require('dotenv').config();
 const rateLimit = require("express-rate-limit");
 // File: server/index.js
 // After adding the rateLimit import (from previous step) and before GameServer:
+const express = require("express");
+const app = express();
+// Disable caching for all routes
+app.use((req, res, next) => {
+    res.setHeader("Cache-Control", "no-store, must-revalidate");
+    next();
+  });  
+// Redirect HTTP to HTTPS
+app.use((req, res, next) => {
+  if (req.headers["x-forwarded-proto"] !== "https") {
+    return res.redirect(`https://${req.headers.host}${req.url}`);
+  }
+  next();
+});
 
-// Define rate limiting middleware to protect against abuse
+// Serve static files and other routes
+app.use(express.static("client"));
+app.listen(process.env.PORT || 3000, () => {
+  console.log("Server is running...");
+});
+
 const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 500, // limit each IP to 500 requests per windowMs
@@ -86,7 +105,7 @@ setInterval(() => {
 // API endpoints for Telegram auth verification
 app.get('/api/verify-telegram-auth', (req, res) => {
     try {
-);
+}});
 // File: server/index.js
 // ADD THIS CODE after the Socket.io initialization (after line 38 in the example above):
 

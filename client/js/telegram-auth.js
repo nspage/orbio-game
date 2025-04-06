@@ -1,4 +1,26 @@
 // Telegram Login Widget Implementation
+// Notify Telegram that the app is ready
+
+tg.ready();
+
+// Example: Access user info
+console.log("User Info:", tg.initDataUnsafe?.user);
+
+// Example: Use the main button
+tg.MainButton.text = "Start Game";
+tg.MainButton.show();
+
+const tg = window.Telegram.WebApp;
+
+// Notify Telegram that the app is ready
+tg.ready();
+
+// Example: Access user info
+console.log("User Info:", tg.initDataUnsafe?.user);
+
+// Example: Use the main button
+tg.MainButton.text = "Start Game";
+tg.MainButton.show();
 
 // Telegram user data
 let telegramUser = null;
