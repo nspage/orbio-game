@@ -20,7 +20,6 @@ const apiLimiter = rateLimit({
     legacyHeaders: false, // Disable the `X-RateLimit-*` headers
     message: "Too many requests from this IP, please try again after 15 minutes"
   });
-  
   // Create a stricter rate limit for sensitive authentication endpoints
   const authLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1 hour
@@ -87,12 +86,7 @@ setInterval(() => {
 // API endpoints for Telegram auth verification
 app.get('/api/verify-telegram-auth', (req, res) => {
     try {
-// Look for these routes in your file - they may be near the bottom:
-
-// API endpoints for Telegram auth verification
-app.get('/api/verify-telegram-auth', (req, res) => {
-    // Code that verifies Telegram authentication...
-});
+);
 // File: server/index.js
 // ADD THIS CODE after the Socket.io initialization (after line 38 in the example above):
 

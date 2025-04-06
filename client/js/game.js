@@ -574,7 +574,7 @@ function checkSavedGuestProgress() {
 // P5.js draw function - called each frame
 function draw() {
     if (gameState === 'playing') {
-        updateGame(){
+        updateGame();
             if (!player || !player.active) return;
             
             // Update player movement based on input (mouse or touch)
@@ -596,8 +596,7 @@ function draw() {
             updateCamera();
         };
         drawGame();
-    }
-}
+    };
 
 // Update game state
 function updateGame() {
